@@ -3,6 +3,9 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI/CD](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/ci.yml/badge.svg)](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/ci.yml)
+[![Colab](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/colab-test.yml/badge.svg)](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/colab-test.yml)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Tommaso-R-Marena/NeuroSymbolic-T4/blob/main/notebooks/NeuroSymbolic_T4_Demo.ipynb)
 
 State-of-the-art neurosymbolic AI system optimized for Google T4 GPUs, combining neural perception with symbolic reasoning for explainable and trustworthy AI.
 
@@ -14,6 +17,7 @@ State-of-the-art neurosymbolic AI system optimized for Google T4 GPUs, combining
 - **T4 Optimized**: Mixed precision training, efficient architectures, and memory optimization for T4 GPUs
 - **Explainable AI**: Generate natural language explanations for predictions and reasoning chains
 - **Probabilistic Logic**: Handle uncertainty with confidence propagation through logical rules
+- **🎓 Interactive Demo**: [Try it in Google Colab](https://colab.research.google.com/github/Tommaso-R-Marena/NeuroSymbolic-T4/blob/main/notebooks/NeuroSymbolic_T4_Demo.ipynb) - No setup required!
 
 ## 📋 Architecture
 
@@ -49,13 +53,26 @@ State-of-the-art neurosymbolic AI system optimized for Google T4 GPUs, combining
 
 ## 🛠️ Installation
 
-### Prerequisites
+### Option 1: Google Colab (Recommended - No Setup!)
+
+**Click here to run instantly:** [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Tommaso-R-Marena/NeuroSymbolic-T4/blob/main/notebooks/NeuroSymbolic_T4_Demo.ipynb)
+
+The Colab notebook includes:
+- ✅ Complete working examples
+- ✅ Performance benchmarking on T4
+- ✅ Interactive demos with explanations
+- ✅ Custom rule creation examples
+- ✅ No local setup required!
+
+### Option 2: Local Installation
+
+#### Prerequisites
 
 - Python 3.8+
 - CUDA 11.8+ (for GPU acceleration)
 - Google Colab with T4 GPU or local T4 GPU
 
-### Setup
+#### Setup
 
 ```bash
 # Clone repository
@@ -66,7 +83,7 @@ cd NeuroSymbolic-T4
 pip install -r requirements.txt
 ```
 
-### Google Colab Setup
+#### Manual Colab Setup
 
 ```python
 # In Colab notebook
@@ -252,9 +269,18 @@ for concept, conf in text_concepts:
 
 ## 🧪 Testing
 
+![CI/CD Status](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/ci.yml/badge.svg)
+![Colab Tests](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/colab-test.yml/badge.svg)
+
+Our comprehensive test suite includes:
+- **Unit Tests**: Neural perception, symbolic reasoning, integration
+- **Integration Tests**: End-to-end pipeline validation
+- **Colab Tests**: Notebook format and metadata validation
+- **Multi-Python Support**: Tested on Python 3.8, 3.9, 3.10, 3.11
+
 ```bash
-# Run tests (if implemented)
-pytest tests/
+# Run tests locally
+pytest tests/ -v
 
 # With coverage
 pytest --cov=neurosymbolic tests/
@@ -282,6 +308,8 @@ Contributions welcome! Please:
 3. Commit changes (`git commit -m 'Add amazing feature'`)
 4. Push to branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+All pull requests are automatically tested via GitHub Actions CI/CD.
 
 ## 📝 License
 
