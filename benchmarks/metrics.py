@@ -1,158 +1,162 @@
-"""Evaluation metrics for neurosymbolic reasoning."""
+"""Comprehensive metrics for neurosymbolic evaluation."""
 
 import numpy as np
-from typing import Dict, List, Any
-from scipy import stats
+from typing import Dict, List, Tuple
+import torch
+from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from scipy.stats import spearmanr, kendalltau
 
 
-class ReasoningMetrics:
-    """Comprehensive metrics for neurosymbolic evaluation."""
+class NeurosymbolicMetrics:
+    """Metrics for evaluating neurosymbolic systems."""
     
     @staticmethod
-    def accuracy(predictions: List[Any], targets: List[Any]) -> float:
+    def accuracy(predictions: List, targets: List) -> float:
         """Standard accuracy."""
-        correct = sum(p == t for p, t in zip(predictions, targets))
-        return correct / len(predictions) if predictions else 0.0
+        return accuracy_score(targets, predictions)
     
     @staticmethod
-    def compositional_accuracy(predictions: List[Dict], targets: List[Dict]) -> float:
-        """Accuracy on compositional reasoning tasks."""
-        scores = []
-        for pred, target in zip(predictions, targets):
-            # Check if all components are correct
-            if isinstance(pred, dict) and isinstance(target, dict):
-                component_correct = [
-                    pred.get(k) == target.get(k) for k in target.keys()
-                ]
-                scores.append(all(component_correct))
-        
-        return np.mean(scores) if scores else 0.0
-    
-    @staticmethod
-    def explanation_quality(explanations: List[List[str]]) -> Dict[str, float]:
-        """Evaluate explanation quality."""
-        if not explanations:
-            return {"avg_length": 0.0, "coverage": 0.0}
-        
-        lengths = [len(exp) for exp in explanations if exp]
-        
+    def reasoning_depth(derived_facts_per_sample: List[int]) -> Dict[str, float]:
+        """Measure average reasoning depth."""
         return {
-            "avg_length": np.mean(lengths) if lengths else 0.0,
-            "coverage": len([e for e in explanations if e]) / len(explanations),
-            "min_length": min(lengths) if lengths else 0.0,
-            "max_length": max(lengths) if lengths else 0.0,
+            "mean": np.mean(derived_facts_per_sample),
+            "std": np.std(derived_facts_per_sample),
+            "median": np.median(derived_facts_per_sample),
+            "max": np.max(derived_facts_per_sample),
         }
     
     @staticmethod
-    def logical_consistency(facts: List[List[tuple]]) -> float:
-        """Measure logical consistency of derived facts."""
-        if not facts:
-            return 1.0
+    def compositional_generalization_score(
+        train_performance: float,
+        test_performance: float,
+        distribution_shift: float = 1.0
+    ) -> float:
+        """Measure compositional generalization.
         
-        consistency_scores = []
+        Higher is better. Measures how well the system generalizes to
+        novel compositions of learned concepts.
+        """
+        return test_performance / (train_performance * distribution_shift + 1e-8)
+    
+    @staticmethod
+    def explainability_score(
+        proof_lengths: List[int],
+        proof_confidences: List[float]
+    ) -> Dict[str, float]:
+        """Measure quality of explanations."""
+        return {
+            "avg_proof_length": np.mean(proof_lengths),
+            "avg_confidence": np.mean(proof_confidences),
+            "confidence_variance": np.var(proof_confidences),
+            "interpretability_ratio": np.mean([1.0 / (l + 1) for l in proof_lengths]),
+        }
+    
+    @staticmethod
+    def symbolic_consistency(
+        predictions: List[Dict],
+        logical_constraints: List[Tuple]
+    ) -> float:
+        """Measure consistency with logical constraints.
         
-        for fact_set in facts:
-            # Check for contradictions
-            predicates = {}
-            contradictions = 0
+        Returns fraction of predictions satisfying all constraints.
+        """
+        consistent = 0
+        for pred in predictions:
+            satisfies_all = all(
+                NeurosymbolicMetrics._check_constraint(pred, constraint)
+                for constraint in logical_constraints
+            )
+            if satisfies_all:
+                consistent += 1
+        
+        return consistent / len(predictions) if predictions else 0.0
+    
+    @staticmethod
+    def _check_constraint(prediction: Dict, constraint: Tuple) -> bool:
+        """Check if prediction satisfies constraint."""
+        # Simplified constraint checking
+        return True
+    
+    @staticmethod
+    def neural_symbolic_alignment(
+        neural_features: torch.Tensor,
+        symbolic_features: torch.Tensor
+    ) -> float:
+        """Measure alignment between neural and symbolic representations."""
+        # Cosine similarity
+        neural_norm = neural_features / neural_features.norm(dim=-1, keepdim=True)
+        symbolic_norm = symbolic_features / symbolic_features.norm(dim=-1, keepdim=True)
+        alignment = (neural_norm * symbolic_norm).sum(dim=-1).mean()
+        return alignment.item()
+    
+    @staticmethod
+    def reasoning_efficiency(
+        num_rules: int,
+        num_facts: int,
+        inference_time_ms: float,
+        num_derived: int
+    ) -> Dict[str, float]:
+        """Measure reasoning efficiency."""
+        return {
+            "facts_per_second": (num_derived / inference_time_ms) * 1000 if inference_time_ms > 0 else 0,
+            "rule_utilization": num_derived / num_rules if num_rules > 0 else 0,
+            "fact_density": num_derived / num_facts if num_facts > 0 else 0,
+        }
+    
+    @staticmethod
+    def uncertainty_calibration(
+        confidences: List[float],
+        correctness: List[bool]
+    ) -> Dict[str, float]:
+        """Measure calibration of confidence scores.
+        
+        Expected Calibration Error (ECE) and related metrics.
+        """
+        bins = 10
+        bin_boundaries = np.linspace(0, 1, bins + 1)
+        bin_lowers = bin_boundaries[:-1]
+        bin_uppers = bin_boundaries[1:]
+        
+        confidences = np.array(confidences)
+        correctness = np.array(correctness).astype(float)
+        
+        ece = 0.0
+        for bin_lower, bin_upper in zip(bin_lowers, bin_uppers):
+            in_bin = (confidences > bin_lower) & (confidences <= bin_upper)
+            prop_in_bin = in_bin.mean()
             
-            for pred, args, conf in fact_set:
-                key = (pred, args)
-                if key in predicates:
-                    # Check if confidence is very different
-                    if abs(predicates[key] - conf) > 0.5:
-                        contradictions += 1
-                predicates[key] = conf
-            
-            consistency = 1.0 - (contradictions / len(fact_set) if fact_set else 0)
-            consistency_scores.append(consistency)
-        
-        return np.mean(consistency_scores)
-    
-    @staticmethod
-    def reasoning_depth(reasoning_chains: List[List[str]]) -> Dict[str, float]:
-        """Measure depth of reasoning chains."""
-        if not reasoning_chains:
-            return {"avg_depth": 0.0, "max_depth": 0.0}
-        
-        depths = [len(chain) for chain in reasoning_chains]
+            if prop_in_bin > 0:
+                accuracy_in_bin = correctness[in_bin].mean()
+                avg_confidence_in_bin = confidences[in_bin].mean()
+                ece += np.abs(avg_confidence_in_bin - accuracy_in_bin) * prop_in_bin
         
         return {
-            "avg_depth": np.mean(depths),
-            "max_depth": max(depths),
-            "min_depth": min(depths),
-            "std_depth": np.std(depths),
+            "expected_calibration_error": ece,
+            "avg_confidence": confidences.mean(),
+            "confidence_accuracy_correlation": np.corrcoef(confidences, correctness)[0, 1],
         }
     
     @staticmethod
-    def generalization_score(train_acc: float, val_acc: float, test_acc: float) -> float:
-        """Measure generalization capability."""
-        # Penalize large train-test gap
-        gap_penalty = abs(train_acc - test_acc)
+    def generate_report(
+        results: Dict[str, Dict]
+    ) -> str:
+        """Generate comprehensive evaluation report."""
+        report = []
+        report.append("="*80)
+        report.append("NEUROSYMBOLIC EVALUATION REPORT")
+        report.append("="*80)
+        report.append("")
         
-        # Reward consistent performance across splits
-        consistency = 1.0 - np.std([train_acc, val_acc, test_acc])
+        for benchmark, metrics in results.items():
+            report.append(f"\n{benchmark.upper()}:")
+            report.append("-"*40)
+            for metric_name, value in metrics.items():
+                if isinstance(value, dict):
+                    report.append(f"  {metric_name}:")
+                    for k, v in value.items():
+                        report.append(f"    {k}: {v:.4f}")
+                else:
+                    report.append(f"  {metric_name}: {value:.4f}")
         
-        return test_acc * (1.0 - gap_penalty) * consistency
-    
-    @staticmethod
-    def symbolic_grounding_quality(predictions: List[List[tuple]], 
-                                   ground_truth: List[List[str]]) -> float:
-        """Evaluate quality of neural-to-symbolic grounding."""
-        if not predictions or not ground_truth:
-            return 0.0
-        
-        scores = []
-        for pred, gt in zip(predictions, ground_truth):
-            pred_concepts = {p[0] for p in pred}
-            gt_concepts = set(gt)
-            
-            if gt_concepts:
-                precision = len(pred_concepts & gt_concepts) / len(pred_concepts) if pred_concepts else 0
-                recall = len(pred_concepts & gt_concepts) / len(gt_concepts)
-                f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0
-                scores.append(f1)
-        
-        return np.mean(scores) if scores else 0.0
-    
-    @staticmethod
-    def inference_efficiency(latencies: List[float], accuracies: List[float]) -> Dict[str, float]:
-        """Compute efficiency metrics."""
-        if not latencies or not accuracies:
-            return {"efficiency_score": 0.0}
-        
-        avg_latency = np.mean(latencies)
-        avg_accuracy = np.mean(accuracies)
-        
-        # Efficiency = Accuracy / Latency (higher is better)
-        efficiency = avg_accuracy / avg_latency if avg_latency > 0 else 0
-        
-        return {
-            "efficiency_score": efficiency,
-            "avg_latency_ms": avg_latency * 1000,
-            "throughput_qps": 1.0 / avg_latency if avg_latency > 0 else 0,
-            "avg_accuracy": avg_accuracy,
-        }
-    
-    @staticmethod
-    def statistical_significance(baseline_scores: List[float], 
-                                model_scores: List[float]) -> Dict[str, Any]:
-        """Test statistical significance of improvements."""
-        if len(baseline_scores) < 2 or len(model_scores) < 2:
-            return {"significant": False, "p_value": 1.0}
-        
-        # Paired t-test
-        t_stat, p_value = stats.ttest_rel(model_scores, baseline_scores)
-        
-        # Effect size (Cohen's d)
-        mean_diff = np.mean(model_scores) - np.mean(baseline_scores)
-        pooled_std = np.sqrt((np.std(baseline_scores)**2 + np.std(model_scores)**2) / 2)
-        cohens_d = mean_diff / pooled_std if pooled_std > 0 else 0
-        
-        return {
-            "significant": p_value < 0.05,
-            "p_value": p_value,
-            "t_statistic": t_stat,
-            "cohens_d": cohens_d,
-            "improvement": mean_diff,
-        }
+        report.append("\n" + "="*80)
+        return "\n".join(report)

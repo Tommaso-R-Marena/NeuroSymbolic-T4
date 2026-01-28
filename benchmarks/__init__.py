@@ -1,15 +1,13 @@
 """Benchmark suite for ICML submission."""
 
 from .clevr import CLEVRBenchmark
+from .vqa import VQABenchmark
 from .gqa import GQABenchmark
-from .kandinsky import KandinskyBenchmark
-from .arc import ARCBenchmark
-from .vqa import VQAv2Benchmark
+from .metrics import NeurosymbolicMetrics
 
 __all__ = [
     "CLEVRBenchmark",
+    "VQABenchmark",
     "GQABenchmark",
-    "KandinskyBenchmark",
-    "ARCBenchmark",
-    "VQAv2Benchmark",
+    "NeurosymbolicMetrics",
 ]

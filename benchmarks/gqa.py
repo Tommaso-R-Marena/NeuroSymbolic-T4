@@ -1,85 +1,95 @@
-"""GQA benchmark for real-world visual reasoning."""
+"""GQA benchmark for real-world visual reasoning.
+
+Reference: Hudson & Manning, "GQA: A New Dataset for Real-World Visual 
+Reasoning and Compositional Question Answering", CVPR 2019.
+"""
 
 import torch
+from torch.utils.data import Dataset, DataLoader
 import json
 from pathlib import Path
-from typing import Dict, List, Any
-from tqdm import tqdm
+from typing import Dict
 import numpy as np
+from PIL import Image
+import torchvision.transforms as transforms
+from tqdm import tqdm
+
+
+class GQADataset(Dataset):
+    """GQA dataset."""
+    
+    def __init__(self, root: str, split: str = "val"):
+        self.root = Path(root)
+        self.split = split
+        self.image_dir = self.root / "images"
+        
+        # Load questions
+        questions_file = self.root / f"{split}_balanced_questions.json"
+        with open(questions_file) as f:
+            self.questions = json.load(f)
+        
+        self.question_ids = list(self.questions.keys())
+        
+        # Transforms
+        self.transform = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], 
+                               std=[0.229, 0.224, 0.225])
+        ])
+    
+    def __len__(self):
+        return len(self.question_ids)
+    
+    def __getitem__(self, idx):
+        qid = self.question_ids[idx]
+        q_data = self.questions[qid]
+        
+        # Load image
+        image_path = self.image_dir / f"{q_data['imageId']}.jpg"
+        image = Image.open(image_path).convert("RGB")
+        image = self.transform(image)
+        
+        return {
+            "image": image,
+            "question": q_data["question"],
+            "answer": q_data["answer"],
+            "semantic": q_data.get("semantic", []),
+            "types": q_data.get("types", {}),
+        }
 
 
 class GQABenchmark:
-    """GQA (Visual Reasoning in the Real World) benchmark.
+    """GQA benchmark evaluation."""
     
-    Reference: Hudson & Manning, CVPR 2019
-    https://cs.stanford.edu/people/dorarad/gqa/
-    """
-    
-    REASONING_TYPES = [
-        "attribute", "relation", "comparison", "logical", "spatial"
-    ]
-    
-    def __init__(self, model, device="cuda", data_dir="data/gqa"):
+    def __init__(self, model, device="cuda"):
         self.model = model
         self.device = device
-        self.data_dir = Path(data_dir)
+        self.model.eval()
     
-    def evaluate(self, split="val", num_samples=1000) -> Dict[str, float]:
+    def evaluate(self, dataset: GQADataset, batch_size: int = 32) -> Dict[str, float]:
         """Evaluate on GQA."""
-        print(f"Running GQA evaluation on {num_samples} samples...")
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=4)
         
-        # Synthetic evaluation (replace with real data loading)
-        return self._synthetic_evaluation(num_samples)
-    
-    def _synthetic_evaluation(self, num_samples=1000) -> Dict[str, float]:
-        """Synthetic GQA evaluation."""
-        metrics = {
-            "overall_accuracy": 0.0,
-            "attribute_accuracy": 0.0,
-            "relation_accuracy": 0.0,
-            "comparison_accuracy": 0.0,
-            "logical_accuracy": 0.0,
-            "spatial_accuracy": 0.0,
-            "consistency": 0.0,
+        results = {
+            "total": 0,
+            "compositional_steps": [],
+            "spatial_relations": [],
         }
         
-        correct = {key: 0 for key in metrics.keys()}
-        
-        for _ in tqdm(range(num_samples), desc="GQA Evaluation"):
-            image = torch.randn(1, 3, 224, 224).to(self.device)
+        print("Evaluating on GQA...")
+        for batch in tqdm(dataloader):
+            images = batch["image"].to(self.device)
             
             with torch.no_grad():
-                output = self.model.forward(image, threshold=0.5)
+                outputs = self.model.forward(images, threshold=0.5)
             
-            symbolic = output["perception"]["symbolic"][0]
-            reasoning = output["reasoning"][0]
-            
-            # Attribute reasoning
-            if any("color" in s[0] or "size" in s[0] for s in symbolic):
-                correct["attribute_accuracy"] += 1
-            
-            # Relation reasoning
-            if reasoning["num_derived"] > 0:
-                correct["relation_accuracy"] += 1
-                correct["logical_accuracy"] += 1
-            
-            # Spatial reasoning (check for spatial concepts)
-            if any("near" in s[0] or "above" in s[0] or "below" in s[0] for s in symbolic):
-                correct["spatial_accuracy"] += 1
-            
-            # Comparison (derived facts indicate comparisons)
-            if reasoning["num_derived"] >= 2:
-                correct["comparison_accuracy"] += 1
-            
-            # Consistency (check if reasoning is consistent)
-            if len(reasoning["derived_facts"]) == reasoning["num_derived"]:
-                correct["consistency"] += 1
-            
-            # Overall
-            if len(symbolic) > 0 and reasoning["num_derived"] > 0:
-                correct["overall_accuracy"] += 1
+            for i in range(len(images)):
+                reasoning = outputs["reasoning"][i]
+                results["compositional_steps"].append(reasoning["num_derived"])
+                results["total"] += 1
         
-        for key in metrics.keys():
-            metrics[key] = correct[key] / num_samples
-        
-        return metrics
+        return {
+            "avg_compositional_steps": np.mean(results["compositional_steps"]),
+            "total_evaluated": results["total"],
+        }
