@@ -66,6 +66,9 @@ class NeuralSymbolicGrounding(nn.Module):
         """
         B, N, D = neural_features.shape
         
+        # Ensure consistent dtype
+        dtype = neural_features.dtype
+        
         # Project to symbolic space
         symbolic_proj = self.neural_to_symbolic(neural_features)
         
@@ -79,6 +82,12 @@ class NeuralSymbolicGrounding(nn.Module):
         
         # Calibrate confidence (combine neural and symbolic)
         neural_conf = neural_features.norm(dim=-1) / D ** 0.5
+        
+        # Ensure symbolic_confidence has correct shape and dtype
+        if symbolic_confidence.dim() == 1:
+            symbolic_confidence = symbolic_confidence.unsqueeze(0).expand(B, -1)
+        symbolic_confidence = symbolic_confidence.to(dtype)
+        
         conf_input = torch.stack([neural_conf, symbolic_confidence], dim=-1)
         calibrated = self.calibration(conf_input).squeeze(-1)
         
@@ -267,13 +276,12 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         import time
         start_time = time.time()
         
-        # Neural perception
-        with torch.cuda.amp.autocast(enabled=True):
-            perception_output = self.perception(
-                x, 
-                return_attention=True,
-                return_relations=True
-            )
+        # Neural perception - disable autocast to avoid dtype issues
+        perception_output = self.perception(
+            x, 
+            return_attention=True,
+            return_relations=True
+        )
         
         perception_time = time.time() - start_time
         self.inference_stats['perception_time'].append(perception_time)
@@ -385,9 +393,11 @@ class EnhancedNeurosymbolicSystem(nn.Module):
             concept_features = perception_output["neural"]["concept_features"]
             concepts = perception_output["neural"]["concepts"]
             
-            grounded_features, calibrated_conf = self.grounding(
-                concept_features, concepts
-            )
+            # Ensure proper dtype for grounding
+            with torch.no_grad():  # Disable autocast for grounding to avoid dtype mismatch
+                grounded_features, calibrated_conf = self.grounding(
+                    concept_features.float(), concepts.float()
+                )
             
             # Update confidences
             perception_output["neural"]["calibrated_concepts"] = calibrated_conf
