@@ -36,6 +36,43 @@ except ImportError:
     HAS_WANDB = False
 
 
+def custom_collate_fn(batch):
+    """Custom collate function to handle variable-sized data.
+    
+    Handles:
+    - Variable-length programs
+    - Variable-length questions
+    - Other list/dict fields
+    """
+    # Stack images
+    images = torch.stack([item["image"] for item in batch])
+    
+    # Handle variable-length fields
+    collated = {
+        "image": images,
+        "question": [item.get("question", "") for item in batch],
+        "answer": [item.get("answer", "") for item in batch],
+        "program": [item.get("program", []) for item in batch],
+    }
+    
+    # Handle tensor fields that can be stacked
+    if "answer_idx" in batch[0]:
+        collated["answer_idx"] = torch.tensor([item["answer_idx"] for item in batch])
+    
+    if "image_idx" in batch[0]:
+        collated["image_idx"] = torch.tensor([item["image_idx"] for item in batch])
+    
+    # Handle concept labels if present
+    if "concepts" in batch[0]:
+        if isinstance(batch[0]["concepts"], torch.Tensor):
+            collated["concepts"] = torch.stack([item["concepts"] for item in batch])
+        else:
+            # Convert to tensor if not already
+            collated["concepts"] = torch.stack([torch.tensor(item["concepts"]) for item in batch])
+    
+    return collated
+
+
 class MultiTaskLoss(nn.Module):
     """Multi-task loss for neurosymbolic learning."""
     
@@ -50,7 +87,7 @@ class MultiTaskLoss(nn.Module):
         # Perception loss (concept classification)
         if "concepts" in targets:
             perception_loss = self.concept_loss(
-                outputs["neural"]["concepts"],
+                outputs["concepts"],
                 targets["concepts"]
             )
             losses["perception"] = perception_loss * self.task_weights["perception"]
@@ -68,7 +105,7 @@ class MultiTaskLoss(nn.Module):
     
     def _reasoning_loss(self, outputs, expected_facts):
         # Simplified - encourage non-zero reasoning
-        return torch.tensor(0.0, device=outputs["neural"]["concepts"].device)
+        return torch.tensor(0.0, device=outputs["concepts"].device)
 
 
 class CurriculumScheduler:
@@ -112,7 +149,7 @@ def train_epoch(model, dataloader, optimizer, scaler, criterion, device, epoch, 
         optimizer.zero_grad()
         
         # Mixed precision forward pass
-        with autocast(enabled=args.use_amp):
+        with autocast(device_type='cuda', enabled=args.use_amp):
             outputs = model.perception(images)
             loss, losses = criterion(outputs, targets)
         
@@ -177,7 +214,7 @@ def evaluate(model, dataloader, criterion, device, args):
         images = batch["image"].to(device)
         targets = {"concepts": batch.get("concepts", torch.zeros(images.size(0), 100)).to(device)}
         
-        with autocast(enabled=args.use_amp):
+        with autocast(device_type='cuda', enabled=args.use_amp):
             # Perception
             perception_out = model.perception(images)
             loss, _ = criterion(perception_out, targets)
@@ -196,7 +233,7 @@ def evaluate(model, dataloader, criterion, device, args):
             
             perception_metrics["concepts_detected"].append(len(symbolic))
             if symbolic:
-                perception_metrics["avg_confidence"].append(np.mean([c for _, c in symbolic]))
+                perception_metrics["avg_confidence"].append(np.mean([c for _, c, _ in symbolic]))
             
             reasoning_metrics["facts_derived"].append(reasoning["num_derived"])
             reasoning_metrics["reasoning_depth"].append(reasoning["num_derived"])
@@ -243,7 +280,7 @@ def main():
     
     # System
     parser.add_argument("--output-dir", type=str, default="checkpoints_benchmark")
-    parser.add_argument("--num-workers", type=int, default=4)
+    parser.add_argument("--num-workers", type=int, default=2)  # Reduced to avoid warnings
     parser.add_argument("--device", type=str, default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     
@@ -323,12 +360,14 @@ def main():
     train_dataset = train_datasets[0] if len(train_datasets) == 1 else ConcatDataset(train_datasets)
     val_dataset = val_datasets[0] if len(val_datasets) == 1 else ConcatDataset(val_datasets)
     
+    # Use custom collate function
     train_loader = DataLoader(
         train_dataset,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
         pin_memory=True,
+        collate_fn=custom_collate_fn,
     )
     
     val_loader = DataLoader(
@@ -337,6 +376,7 @@ def main():
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=True,
+        collate_fn=custom_collate_fn,
     )
     
     print(f"Train samples: {len(train_dataset)}")
@@ -360,8 +400,8 @@ def main():
     else:
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=5)
     
-    # Gradient scaler for mixed precision
-    scaler = GradScaler(enabled=args.use_amp)
+    # Gradient scaler for mixed precision - use new API
+    scaler = GradScaler(device='cuda', enabled=args.use_amp) if torch.cuda.is_available() else GradScaler(enabled=False)
     
     # Curriculum scheduler
     curriculum = CurriculumScheduler(args.epochs) if args.curriculum else None
