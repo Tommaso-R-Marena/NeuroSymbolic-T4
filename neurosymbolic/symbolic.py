@@ -420,7 +420,7 @@ class EnhancedSymbolicReasoner:
         # Try to prove via rules (only use strong rules)
         for rule in sorted(self.rules, key=lambda r: r.strength * r.confidence, reverse=True):
             if rule.head[0] == pred:
-                head_binding = self._try_bind(args, rule.head[1])
+                head_binding = self._try_bind(rule.head[1], args)
                 if head_binding is not None:
                     body_proofs = self._prove_conjunction(
                         rule.body, head_binding, depth + 1, max_depth

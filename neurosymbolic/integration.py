@@ -340,20 +340,33 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         self.reasoner.clear()
         self._initialize_enhanced_knowledge()
         
-        # Add perceived concepts as facts
-        for concept, confidence, attrs in symbolic_scene:
-            self.reasoner.add_fact(concept, (object_id,), confidence, "perceived")
-            
+        # Add perceived concepts as facts (supports legacy 2-tuples and enhanced 3-tuples)
+        normalized_scene: List[Tuple[str, float, Dict[str, Any]]] = []
+        for item in symbolic_scene:
+            if len(item) == 2:
+                concept, confidence = item
+                attrs = {}
+            elif len(item) == 3:
+                concept, confidence, attrs = item
+                attrs = attrs or {}
+            else:
+                raise ValueError(
+                    "Each symbolic item must be (concept, confidence) or (concept, confidence, attrs)"
+                )
+
+            normalized_scene.append((concept, float(confidence), attrs))
+            self.reasoner.add_fact(concept, (object_id,), float(confidence), "perceived")
+
             # Add attribute facts
             for attr_name, attr_val in attrs.items():
                 attr_pred = f"{attr_name}_{attr_val}"
-                self.reasoner.add_fact(attr_pred, (object_id,), confidence * 0.9, "perceived")
+                self.reasoner.add_fact(attr_pred, (object_id,), float(confidence) * 0.9, "perceived")
         
         # Adaptive rule selection if enabled
         if self.use_adaptive_rules and hasattr(self, 'rule_selector'):
             # Get context from scene
             concept_vec = torch.zeros(len(self.concept_names))
-            for concept, conf, _ in symbolic_scene:
+            for concept, conf, _ in normalized_scene:
                 if concept in self.concept_to_idx:
                     concept_vec[self.concept_to_idx[concept]] = conf
             
@@ -369,7 +382,7 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         self.inference_stats['total_facts_derived'].append(num_derived)
         
         # Collect derived facts
-        original_concepts = {concept for concept, _, _ in symbolic_scene}
+        original_concepts = {concept for concept, _, _ in normalized_scene}
         derived_facts = [
             (fact.predicate, fact.arguments, fact.confidence, fact.source)
             for fact in self.reasoner.facts

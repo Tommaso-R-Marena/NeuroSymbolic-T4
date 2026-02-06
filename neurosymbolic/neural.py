@@ -69,6 +69,39 @@ class CrossAttention(nn.Module):
         return out, attn.mean(dim=1)  # Return attention weights for visualization
 
 
+class AttentionPool(nn.Module):
+    """Multi-head attention pooling from a sequence to a single vector.
+
+    This module is kept for backwards compatibility with the original
+    PerceptionModule API used by tests and Colab notebooks.
+    """
+
+    def __init__(self, dim: int, num_heads: int = 8, dropout: float = 0.1):
+        super().__init__()
+        self.query = nn.Parameter(torch.randn(1, 1, dim))
+        self.attn = nn.MultiheadAttention(
+            embed_dim=dim,
+            num_heads=num_heads,
+            dropout=dropout,
+            batch_first=True,
+        )
+        self.norm = nn.LayerNorm(dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Pool a sequence tensor.
+
+        Args:
+            x: [B, N, D]
+
+        Returns:
+            [B, D] pooled representation
+        """
+        B = x.shape[0]
+        q = self.query.expand(B, -1, -1)
+        pooled, _ = self.attn(q, x, x)
+        return self.norm(pooled.squeeze(1))
+
+
 class DynamicConceptRouter(nn.Module):
     """Dynamic routing for concept detection with uncertainty."""
     
@@ -239,6 +272,7 @@ class EnhancedPerceptionModule(nn.Module):
         dropout: float = 0.1,
         use_fpn: bool = True,
         use_memory: bool = True,
+        pretrained: bool = False,
     ):
         super().__init__()
         
@@ -246,13 +280,23 @@ class EnhancedPerceptionModule(nn.Module):
         self.use_memory = use_memory
         
         # Efficient backbone
-        self.backbone = timm.create_model(
-            backbone,
-            pretrained=True,
-            features_only=use_fpn,
-            num_classes=0,
-            global_pool="" if not use_fpn else None
-        )
+        try:
+            self.backbone = timm.create_model(
+                backbone,
+                pretrained=pretrained,
+                features_only=use_fpn,
+                num_classes=0,
+                global_pool="" if not use_fpn else None
+            )
+        except Exception:
+            # Fallback for offline/Colab environments with restricted downloads.
+            self.backbone = timm.create_model(
+                backbone,
+                pretrained=False,
+                features_only=use_fpn,
+                num_classes=0,
+                global_pool="" if not use_fpn else None
+            )
         
         # Get backbone output dimension
         if use_fpn:
@@ -427,6 +471,7 @@ class EnhancedPerceptionModule(nn.Module):
             "attributes": attributes,
             "bboxes": bboxes,
             "objectness": objectness,
+            "confidence": objectness,
             "positions": positions,
         }
         
