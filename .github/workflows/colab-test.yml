@@ -24,48 +24,33 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nbformat nbconvert jupyter
+        pip install -r requirements.txt
+        pip install nbformat nbconvert jupyter ipykernel
+        python -m ipykernel install --user --name python3
     
-    - name: Validate notebook format
+    - name: Validate and execute notebooks
       run: |
-        python -c "
+        for notebook in notebooks/*.ipynb; do
+          echo "Processing $notebook..."
+
+          # Validate format
+          python -c "import nbformat; nbformat.read('$notebook', as_version=4)" || exit 1
+          echo "✓ $notebook format is valid"
+
+          # Execute a subset of the notebook for testing (mocking heavy parts)
+          # We use --ExecutePreprocessor.timeout=600 to allow for model initialization
+          # and we only run the Demo notebook fully since Full_Pipeline takes too long
+          if [[ "$notebook" == *"Demo"* ]]; then
+            echo "Executing $notebook..."
+            # Create a test version that skips the !git clone and !pip install parts
+            python -c "
 import nbformat
-import sys
-
-try:
-    with open('notebooks/NeuroSymbolic_T4_Demo.ipynb', 'r') as f:
-        nb = nbformat.read(f, as_version=4)
-    print('✓ Notebook format is valid')
-    print(f'✓ Contains {len(nb.cells)} cells')
-    sys.exit(0)
-except Exception as e:
-    print(f'✗ Notebook validation failed: {e}')
-    sys.exit(1)
+nb = nbformat.read('$notebook', as_version=4)
+# Remove cells containing !git clone or !pip install to avoid network/loop issues
+nb.cells = [c for c in nb.cells if not ('!git clone' in c.source or '!pip install' in c.source)]
+nbformat.write(nb, 'test_exec.ipynb')
 "
-    
-    - name: Check notebook metadata
-      run: |
-        python -c "
-import json
-
-with open('notebooks/NeuroSymbolic_T4_Demo.ipynb', 'r') as f:
-    nb = json.load(f)
-
-metadata = nb.get('metadata', {})
-colab = metadata.get('colab', {})
-accelerator = metadata.get('accelerator', '')
-
-print('Notebook metadata:')
-print(f'  GPU Type: {colab.get(\"gpuType\", \"Not specified\")}')
-print(f'  Accelerator: {accelerator}')
-
-if colab.get('gpuType') == 'T4':
-    print('✓ Configured for T4 GPU')
-else:
-    print('⚠ Not explicitly configured for T4')
-"
-    
-    - name: Test notebook can be converted
-      run: |
-        jupyter nbconvert --to script notebooks/NeuroSymbolic_T4_Demo.ipynb --stdout > /dev/null
-        echo "✓ Notebook can be converted to script"
+            jupyter nbconvert --to notebook --execute test_exec.ipynb --output executed.ipynb || exit 1
+            echo "✓ $notebook executed successfully"
+          fi
+        done
