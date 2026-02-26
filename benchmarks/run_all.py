@@ -79,12 +79,9 @@ def main():
     print("="*80)
     
     if args.mock:
-        print("Running in MOCK mode...")
-        clevr_results = {
-            "accuracy": 0.753,
-            "avg_reasoning_depth": 3.2,
-            "total_evaluated": 1000
-        }
+        print("Running CLEVR in MOCK mode (synthetic evaluation)...")
+        clevr_benchmark = CLEVRBenchmark(model, device=device)
+        clevr_results = clevr_benchmark.evaluate(num_samples=50)
         clevr_analysis = {
             "counting": {"mean": 3.5, "std": 0.5},
             "spatial_reasoning": {"mean": 2.8, "std": 0.4}
@@ -113,12 +110,9 @@ def main():
     print("="*80)
     
     if args.mock:
-        vqa_results = {
-            "accuracy": 0.682,
-            "avg_concepts_detected": 8.4,
-            "avg_facts_derived": 4.2,
-            "total_evaluated": 1000
-        }
+        print("Running VQA in MOCK mode (synthetic evaluation)...")
+        vqa_benchmark = VQABenchmark(model, device=device)
+        vqa_results = vqa_benchmark.evaluate(num_samples=50)
         all_results["VQA"] = vqa_results
     else:
         try:
@@ -141,11 +135,9 @@ def main():
     print("="*80)
     
     if args.mock:
-        gqa_results = {
-            "accuracy": 0.647,
-            "avg_compositional_steps": 3.2,
-            "total_evaluated": 1000
-        }
+        print("Running GQA in MOCK mode (synthetic evaluation)...")
+        gqa_benchmark = GQABenchmark(model, device=device)
+        gqa_results = gqa_benchmark.evaluate(num_samples=50)
         all_results["GQA"] = gqa_results
     else:
         try:

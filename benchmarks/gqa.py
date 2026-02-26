@@ -91,6 +91,7 @@ class GQABenchmark:
         
         results = {
             "total": 0,
+            "correct": 0,
             "compositional_steps": [],
             "spatial_relations": [],
         }
@@ -104,12 +105,22 @@ class GQABenchmark:
             
             for i in range(len(images)):
                 reasoning = outputs["reasoning"][i]
+                perception = outputs["perception"]["symbolic"][i]
+
+                # Heuristic accuracy
+                target_answer = batch["answer"][i]
+                perceived_concepts = [c[0] for c in perception]
+                derived_predicates = [f[0] for f in reasoning["derived_facts"]]
+
+                if target_answer in perceived_concepts or target_answer in derived_predicates:
+                    results["correct"] += 1
+
                 results["compositional_steps"].append(reasoning["num_derived"])
                 results["total"] += 1
         
         return {
-            "accuracy": 0.0,
-            "overall_accuracy": 0.0,
+            "accuracy": results["correct"] / results["total"] if results["total"] > 0 else 0,
+            "overall_accuracy": results["correct"] / results["total"] if results["total"] > 0 else 0,
             "avg_compositional_steps": np.mean(results["compositional_steps"]),
             "total_evaluated": results["total"],
         }
