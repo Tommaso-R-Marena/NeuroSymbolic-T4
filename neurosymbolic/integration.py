@@ -146,7 +146,10 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         
         # Enhanced perception
         perception_config = perception_config or {}
-        self.perception = EnhancedPerceptionModule(**perception_config)
+        try:
+            self.perception = EnhancedPerceptionModule(**perception_config)
+        except TypeError as e:
+            raise ValueError(f"Invalid perception_config: {e}")
         
         # Enhanced symbolic reasoner
         reasoning_config = reasoning_config or {}
@@ -398,6 +401,9 @@ class EnhancedNeurosymbolicSystem(nn.Module):
     
     def forward(self, x: torch.Tensor, threshold: float = 0.5) -> Dict[str, Any]:
         """Complete enhanced forward pass."""
+        if x is None or (isinstance(x, torch.Tensor) and x.numel() == 0):
+            raise ValueError("Input tensor x cannot be None or empty")
+
         # Perception
         perception_output = self.perceive(x, threshold)
         

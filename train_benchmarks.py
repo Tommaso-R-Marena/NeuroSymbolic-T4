@@ -233,7 +233,9 @@ def evaluate(model, dataloader, criterion, device, args):
             
             perception_metrics["concepts_detected"].append(len(symbolic))
             if symbolic:
-                perception_metrics["avg_confidence"].append(np.mean([c for _, c, _ in symbolic]))
+                # Handle both 2-tuples and 3-tuples
+                confidences = [item[1] for item in symbolic]
+                perception_metrics["avg_confidence"].append(np.mean(confidences))
             
             reasoning_metrics["facts_derived"].append(reasoning["num_derived"])
             reasoning_metrics["reasoning_depth"].append(reasoning["num_derived"])

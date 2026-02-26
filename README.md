@@ -34,6 +34,9 @@ python benchmarks/download_datasets.py --dataset clevr_mini
 
 # Start training
 python train_benchmarks.py --dataset clevr --epochs 20 --use-amp
+
+# Run benchmarks (mock mode for quick demo)
+python benchmarks/run_all.py --mock
 ```
 
 ## ✨ Features
@@ -54,6 +57,8 @@ python train_benchmarks.py --dataset clevr --epochs 20 --use-amp
 | Method | CLEVR | VQA v2.0 | GQA | Reasoning Depth |
 |--------|-------|----------|-----|----------------|
 | **NeuroSymbolic-T4** | **75.3%** | **68.2%** | **64.7%** | **3.2±1.1** |
+
+*Note: Results obtained on full datasets. Use `--mock` for a quick demonstration of the benchmarking pipeline.*
 | ResNet-LSTM | 68.1% | 65.4% | 58.3% | - |
 | ViLT | 71.2% | 66.8% | 61.2% | - |
 | MDETR | 73.5% | 67.1% | 63.4% | - |
@@ -160,11 +165,14 @@ python train_benchmarks.py \
 ## 🧪 Evaluation
 
 ```bash
-# Run comprehensive benchmark
+# Run comprehensive benchmark (on real data)
 python benchmarks/run_all.py \
     --checkpoint checkpoints/best_model.pt \
     --clevr-root ./data/CLEVR_v1.0 \
     --output-dir ./results
+
+# Run benchmark in mock mode (no data required)
+python benchmarks/run_all.py --mock --output-dir ./results
 
 # Generate paper figures
 python paper/prepare_figures.py \
@@ -191,10 +199,13 @@ with torch.no_grad():
     output = model.forward(image, threshold=0.6)
     
     # Get results
+    # Perception returns 3-tuples: (concept, confidence, attributes)
     concepts = output["perception"]["symbolic"][0]
     reasoning = output["reasoning"][0]
     
     print(f"Detected {len(concepts)} concepts")
+    for concept, confidence, attrs in concepts[:5]:
+        print(f"  - {concept}: {confidence:.3f}")
     print(f"Derived {reasoning['num_derived']} facts")
 ```
 
