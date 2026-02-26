@@ -121,6 +121,18 @@ class AdaptiveRuleSelector(nn.Module):
         return self.rule_selector(context)
 
 
+class NeurosymbolicError(Exception):
+    """Base exception for neurosymbolic system."""
+    pass
+
+class PerceptionError(NeurosymbolicError):
+    """Error during neural perception."""
+    pass
+
+class ReasoningError(NeurosymbolicError):
+    """Error during symbolic reasoning."""
+    pass
+
 class EnhancedNeurosymbolicSystem(nn.Module):
     """Enhanced neurosymbolic system with advanced integration.
     
@@ -280,11 +292,14 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         start_time = time.time()
         
         # Neural perception - disable autocast to avoid dtype issues
-        perception_output = self.perception(
-            x, 
-            return_attention=True,
-            return_relations=True
-        )
+        try:
+            perception_output = self.perception(
+                x,
+                return_attention=True,
+                return_relations=True
+            )
+        except Exception as e:
+            raise PerceptionError(f"Neural perception failed: {e}")
         
         perception_time = time.time() - start_time
         self.inference_stats['perception_time'].append(perception_time)
@@ -378,7 +393,10 @@ class EnhancedNeurosymbolicSystem(nn.Module):
             pass
         
         # Forward chaining with GNN
-        num_derived = self.reasoner.forward_chain(max_iterations=5, use_gnn=use_gnn)
+        try:
+            num_derived = self.reasoner.forward_chain(max_iterations=5, use_gnn=use_gnn)
+        except Exception as e:
+            raise ReasoningError(f"Symbolic reasoning failed: {e}")
         
         reasoning_time = time.time() - start_time
         self.inference_stats['reasoning_time'].append(reasoning_time)
