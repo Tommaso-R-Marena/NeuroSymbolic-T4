@@ -99,6 +99,7 @@ class VQABenchmark:
         
         results = {
             "total": 0,
+            "correct": 0,
             "perception_concepts": [],
             "reasoning_facts": [],
             "by_question_type": {},
@@ -116,13 +117,21 @@ class VQABenchmark:
                 perception = outputs["perception"]["symbolic"][i]
                 reasoning = outputs["reasoning"][i]
                 
+                # Heuristic accuracy: check if any ground truth answer matches detected concepts
+                target_answers = batch["answers"][i]
+                perceived_concepts = [c[0] for c in perception]
+                derived_predicates = [f[0] for f in reasoning["derived_facts"]]
+
+                if any(ans in perceived_concepts or ans in derived_predicates for ans in target_answers):
+                    results["correct"] += 1
+
                 results["perception_concepts"].append(len(perception))
                 results["reasoning_facts"].append(reasoning["num_derived"])
                 results["total"] += 1
         
         metrics = {
-            "accuracy": 0.0,
-            "overall_accuracy": 0.0,
+            "accuracy": results["correct"] / results["total"] if results["total"] > 0 else 0,
+            "overall_accuracy": results["correct"] / results["total"] if results["total"] > 0 else 0,
             "avg_concepts_detected": np.mean(results["perception_concepts"]),
             "avg_facts_derived": np.mean(results["reasoning_facts"]),
             "total_evaluated": results["total"],

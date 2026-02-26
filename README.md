@@ -17,10 +17,10 @@ State-of-the-art neurosymbolic AI system optimized for Google T4 GPUs, combining
 
 **Try it now** - Complete demo with benchmarks, ablations, and visualizations
 
-### Option 2: Train Your Own Model
-[![Open Training](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Tommaso-R-Marena/NeuroSymbolic-T4/blob/main/notebooks/NeuroSymbolic_T4_Training.ipynb)
+### Option 2: Full Research Pipeline (Recommended)
+[![Open Pipeline](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Tommaso-R-Marena/NeuroSymbolic-T4/blob/main/notebooks/NeuroSymbolic_T4_Full_Pipeline.ipynb)
 
-**Automatic training** - Downloads CLEVR and trains model in ~45 minutes
+**End-to-end workflow** - Rigorous pipeline: Download → Train → Benchmark → Visualize results.
 
 ### Option 3: Local Installation
 
@@ -246,6 +246,7 @@ print(f"Derived {num_derived} new facts")
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - Architecture details
 - **[docs/API.md](./docs/API.md)** - API reference
 - **[Demo Notebook](./notebooks/NeuroSymbolic_T4_Demo.ipynb)** - Interactive demo
+- **[Full Pipeline Notebook](./notebooks/NeuroSymbolic_T4_Full_Pipeline.ipynb)** - End-to-end research workflow
 - **[Training Notebook](./notebooks/NeuroSymbolic_T4_Training.ipynb)** - Training walkthrough
 
 ## 📊 Available Datasets
