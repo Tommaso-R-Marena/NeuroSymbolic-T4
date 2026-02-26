@@ -77,7 +77,11 @@ def evaluate_perception(model, device, num_samples=100):
         
         symbolic = perception["symbolic"][0]
         if symbolic:
-            concepts, confidences = zip(*symbolic)
+            # Handle both 2-tuples and 3-tuples
+            if len(symbolic[0]) == 2:
+                concepts, confidences = zip(*symbolic)
+            else:
+                concepts, confidences, _ = zip(*symbolic)
             concept_activations.append(len(concepts))
             confidence_scores.extend(confidences)
     
@@ -174,15 +178,29 @@ def main():
     results["perception"] = evaluate_perception(model, device, args.num_samples)
     results["inference_speed"] = benchmark_inference(model, device, 100)
     
+    # Helper to make results JSON serializable
+    def make_serializable(obj):
+        if isinstance(obj, dict):
+            return {k: make_serializable(v) for k, v in obj.items()}
+        elif isinstance(obj, list):
+            return [make_serializable(v) for v in obj]
+        elif isinstance(obj, (np.int64, np.int32, np.integer)):
+            return int(obj)
+        elif isinstance(obj, (np.float64, np.float32, np.floating)):
+            return float(obj)
+        return obj
+
+    serializable_results = make_serializable(results)
+
     # Print results
     print("\n" + "="*50)
     print("EVALUATION RESULTS")
     print("="*50)
-    print(json.dumps(results, indent=2))
+    print(json.dumps(serializable_results, indent=2))
     
     # Save results
     with open(args.output, "w") as f:
-        json.dump(results, f, indent=2)
+        json.dump(serializable_results, f, indent=2)
     
     print(f"\nResults saved to {args.output}")
 

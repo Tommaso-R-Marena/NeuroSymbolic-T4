@@ -160,3 +160,7 @@ class NeurosymbolicMetrics:
         
         report.append("\n" + "="*80)
         return "\n".join(report)
+
+
+# Alias for notebook compatibility
+ReasoningMetrics = NeurosymbolicMetrics

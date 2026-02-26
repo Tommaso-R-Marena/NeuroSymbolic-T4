@@ -12,7 +12,7 @@ Major improvements:
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any
 import timm
 import math
 
@@ -391,7 +391,7 @@ class EnhancedPerceptionModule(nn.Module):
         x: torch.Tensor,
         return_attention: bool = False,
         return_relations: bool = False
-    ) -> Dict[str, torch.Tensor]:
+    ) -> Dict[str, Any]:
         """Enhanced forward pass.
         
         Args:
@@ -483,7 +483,7 @@ class EnhancedPerceptionModule(nn.Module):
         
         return output
     
-    def extract_symbolic_scene(self, x: torch.Tensor, threshold: float = 0.5) -> List[Dict]:
+    def extract_symbolic_scene(self, x: torch.Tensor, threshold: float = 0.5) -> List[Dict[str, Any]]:
         """Extract enhanced symbolic scene representation.
         
         Returns objects with concepts, attributes, and spatial relations.
