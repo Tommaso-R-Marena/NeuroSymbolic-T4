@@ -155,6 +155,15 @@ class FeaturePyramidNetwork(nn.Module):
         ])
         
     def forward(self, features: List[torch.Tensor]) -> List[torch.Tensor]:
+        """
+        Forward pass for Feature Pyramid Network.
+
+        Args:
+            features: List of feature maps from the backbone, from fine to coarse.
+
+        Returns:
+            List of feature maps after FPN processing.
+        """
         # Top-down pathway
         laterals = [lateral(f) for lateral, f in zip(self.lateral_convs, features)]
         
@@ -162,7 +171,9 @@ class FeaturePyramidNetwork(nn.Module):
         outputs = [laterals[-1]]
         for i in range(len(laterals) - 2, -1, -1):
             # Upsample and add
-            upsampled = F.interpolate(outputs[0], scale_factor=2, mode='nearest')
+            # Use bilinear upsampling for smoother transitions if target size is not exact multiple
+            # but usually FPN uses nearest. Let's stick with nearest for simplicity but allow alignment if needed.
+            upsampled = F.interpolate(outputs[0], size=laterals[i].shape[-2:], mode='nearest')
             outputs.insert(0, laterals[i] + upsampled)
         
         # Apply output convs
@@ -443,17 +454,12 @@ class EnhancedPerceptionModule(nn.Module):
         for attr_name, head in self.attribute_heads.items():
             attributes[attr_name] = torch.softmax(head(concept_features), dim=-1)
         
-        # Extract spatial positions from attention (max attention location)
-        positions = []
-        for b in range(B):
-            pos = torch.zeros(self.concept_queries.shape[0], 2, device=x.device)
-            for c in range(self.concept_queries.shape[0]):
-                attn = attention_weights[b, c].view(H, W)
-                h_idx, w_idx = torch.where(attn == attn.max())
-                pos[c, 0] = h_idx[0].float() / H
-                pos[c, 1] = w_idx[0].float() / W
-            positions.append(pos)
-        positions = torch.stack(positions)  # [B, num_concepts, 2]
+        # Vectorized extraction of spatial positions from attention (max attention location)
+        # attention_weights: [B, num_concepts, H*W]
+        max_indices = attention_weights.argmax(dim=-1)  # [B, num_concepts]
+        h_idx = (max_indices // W).float() / H
+        w_idx = (max_indices % W).float() / W
+        positions = torch.stack([h_idx, w_idx], dim=-1)  # [B, num_concepts, 2]
         
         # Extract spatial relations
         if return_relations:

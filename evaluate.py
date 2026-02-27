@@ -77,11 +77,8 @@ def evaluate_perception(model, device, num_samples=100):
         
         symbolic = perception["symbolic"][0]
         if symbolic:
-            # Handle both 2-tuples and 3-tuples
-            if len(symbolic[0]) == 2:
-                concepts, confidences = zip(*symbolic)
-            else:
-                concepts, confidences, _ = zip(*symbolic)
+            # Standardized 3-tuple handling: (concept, confidence, attributes)
+            concepts, confidences, _ = zip(*symbolic)
             concept_activations.append(len(concepts))
             confidence_scores.extend(confidences)
     

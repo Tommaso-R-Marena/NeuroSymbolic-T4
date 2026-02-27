@@ -144,36 +144,72 @@ class GraphNeuralReasoner(nn.Module):
 class HierarchicalReasoner:
     """Hierarchical reasoning with multiple abstraction levels."""
     
-    def __init__(self):
+    def __init__(self, parent_reasoner: 'EnhancedSymbolicReasoner' = None):
         self.levels: Dict[int, Set[Fact]] = defaultdict(set)
         self.abstraction_rules: Dict[int, List[Rule]] = defaultdict(list)
+        self.parent_reasoner = parent_reasoner
         
     def add_fact_to_level(self, fact: Fact, level: int = 0):
         """Add fact to specific abstraction level."""
         self.levels[level].add(fact)
     
+    def add_abstraction_rule(self, level: int, rule: Rule):
+        """Add a rule that abstracts facts from 'level' to 'level + 1'."""
+        self.abstraction_rules[level].append(rule)
+
     def abstract_to_higher_level(self, level: int) -> Set[Fact]:
         """Abstract facts from level to level+1."""
-        abstract_facts = set()
+        if level not in self.levels or level not in self.abstraction_rules:
+            return set()
+
+        # Temporary reasoner to perform forward chaining with abstraction rules
+        temp_reasoner = EnhancedSymbolicReasoner(use_gnn=False)
+        for fact in self.levels[level]:
+            temp_reasoner.add_fact(fact.predicate, fact.arguments, fact.confidence, "hierarchical")
         
-        # Apply abstraction rules
         for rule in self.abstraction_rules[level]:
-            # Apply rule to derive higher-level facts
-            # This would use rule matching similar to forward chaining
-            pass
+            temp_reasoner.add_rule(rule.head, rule.body, rule.confidence)
+
+        temp_reasoner.forward_chain(max_iterations=5)
         
+        # Collect derived facts (the heads of the abstraction rules)
+        abstract_predicates = {rule.head[0] for rule in self.abstraction_rules[level]}
+        abstract_facts = {f for f in temp_reasoner.facts if f.predicate in abstract_predicates}
+
+        for fact in abstract_facts:
+            self.add_fact_to_level(fact, level + 1)
+
         return abstract_facts
     
     def reason_hierarchically(self, query: Tuple[str, Tuple[str, ...]], 
                              max_level: int = 3) -> List[Dict]:
         """Reason using hierarchical abstraction."""
-        # Start from highest level and work down
+        # Perform abstraction up to max_level
+        for level in range(max_level):
+            self.abstract_to_higher_level(level)
+
+        # Try to answer query at any level, starting from the highest
+        proofs = []
         for level in range(max_level, -1, -1):
-            # Try to answer query at this level
-            # If successful, ground back to lower levels
-            pass
+            if level not in self.levels:
+                continue
+
+            temp_reasoner = EnhancedSymbolicReasoner(use_gnn=False)
+            for fact in self.levels[level]:
+                temp_reasoner.add_fact(fact.predicate, fact.arguments, fact.confidence)
+
+            # If we have parent reasoner, use its rules
+            if self.parent_reasoner:
+                temp_reasoner.rules = self.parent_reasoner.rules
+
+            level_proofs = temp_reasoner.backward_chain(query)
+            if level_proofs:
+                for p in level_proofs:
+                    p['hierarchical_level'] = level
+                proofs.extend(level_proofs)
+                break # Found answer at highest possible level
         
-        return []
+        return proofs
 
 
 class EnhancedSymbolicReasoner:
@@ -327,12 +363,18 @@ class EnhancedSymbolicReasoner:
         facts_list = list(self.facts)
         node_features = torch.stack([self.fact_embeddings[f] for f in facts_list])
         
-        # Build edge index (connect facts with shared arguments)
+        # Optimized edge index construction using argument indexing
         edges = []
-        for i, f1 in enumerate(facts_list):
-            for j, f2 in enumerate(facts_list):
-                if i != j and any(arg in f2.arguments for arg in f1.arguments):
-                    edges.append([i, j])
+        arg_to_indices = defaultdict(list)
+        for idx, fact in enumerate(facts_list):
+            for arg in fact.arguments:
+                arg_to_indices[arg].append(idx)
+
+        for indices in arg_to_indices.values():
+            for i in range(len(indices)):
+                for j in range(i + 1, len(indices)):
+                    edges.append([indices[i], indices[j]])
+                    edges.append([indices[j], indices[i]])
         
         if not edges:
             return 0
