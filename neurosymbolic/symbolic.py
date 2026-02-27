@@ -127,9 +127,9 @@ class GraphNeuralReasoner(nn.Module):
             messages = message_layer(torch.cat([src_features, dst_features], dim=-1))
             
             # Aggregate messages (scatter sum)
+            # Optimized with index_add_ for T4 performance
             aggregated = torch.zeros_like(x)
-            for i in range(len(dst)):
-                aggregated[dst[i]] += messages[i]
+            aggregated.index_add_(0, dst, messages)
             
             # Update node features
             x = agg_layer(torch.cat([x, aggregated], dim=-1))
@@ -144,7 +144,7 @@ class GraphNeuralReasoner(nn.Module):
 class HierarchicalReasoner:
     """Hierarchical reasoning with multiple abstraction levels."""
     
-    def __init__(self, parent_reasoner: 'EnhancedSymbolicReasoner' = None):
+    def __init__(self, parent_reasoner: 'SymbolicReasoner' = None):
         self.levels: Dict[int, Set[Fact]] = defaultdict(set)
         self.abstraction_rules: Dict[int, List[Rule]] = defaultdict(list)
         self.parent_reasoner = parent_reasoner
@@ -163,7 +163,7 @@ class HierarchicalReasoner:
             return set()
 
         # Temporary reasoner to perform forward chaining with abstraction rules
-        temp_reasoner = EnhancedSymbolicReasoner(use_gnn=False)
+        temp_reasoner = SymbolicReasoner(use_gnn=False)
         for fact in self.levels[level]:
             temp_reasoner.add_fact(fact.predicate, fact.arguments, fact.confidence, "hierarchical")
         
@@ -194,7 +194,7 @@ class HierarchicalReasoner:
             if level not in self.levels:
                 continue
 
-            temp_reasoner = EnhancedSymbolicReasoner(use_gnn=False)
+            temp_reasoner = SymbolicReasoner(use_gnn=False)
             for fact in self.levels[level]:
                 temp_reasoner.add_fact(fact.predicate, fact.arguments, fact.confidence)
 
@@ -212,9 +212,20 @@ class HierarchicalReasoner:
         return proofs
 
 
-class EnhancedSymbolicReasoner:
+class SymbolicReasoner:
     """Enhanced symbolic reasoning with neural-symbolic integration.
     
+    This reasoner combines classical symbolic logic with neural enhancements.
+    It supports fuzzy logic operations, where the confidence of a conjunction
+    is computed using the product t-norm:
+
+    C(A ∧ B) = C(A) * C(B)
+
+    And for a rule R: H :- B1, B2, ..., Bn with confidence C(R), the derived
+    fact H has confidence:
+
+    C(H) = C(R) * C(B1) * C(B2) * ... * C(Bn)
+
     Features:
     - Graph neural network for relational reasoning
     - Rule learning from examples
@@ -222,6 +233,12 @@ class EnhancedSymbolicReasoner:
     - Fuzzy logic operations
     - Temporal reasoning
     - Counterfactual explanations
+
+    Attributes:
+        facts (Set[Fact]): The set of known and derived facts.
+        rules (List[Rule]): The set of logical rules.
+        confidence_threshold (float): Threshold for pruning low-confidence facts.
+        use_gnn (bool): Whether to use GNN-based refinement.
     """
     
     def __init__(self, 
@@ -574,4 +591,3 @@ class EnhancedSymbolicReasoner:
 
 
 # Backwards compatibility
-SymbolicReasoner = EnhancedSymbolicReasoner

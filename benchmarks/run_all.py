@@ -82,11 +82,7 @@ def main():
         print("Running CLEVR in MOCK mode (synthetic evaluation)...")
         clevr_benchmark = CLEVRBenchmark(model, device=device)
         clevr_results = clevr_benchmark.evaluate(num_samples=50)
-        clevr_analysis = {
-            "counting": {"mean": 3.5, "std": 0.5},
-            "spatial_reasoning": {"mean": 2.8, "std": 0.4}
-        }
-        all_results["CLEVR"] = {**clevr_results, **clevr_analysis}
+        all_results["CLEVR"] = clevr_results
     else:
         try:
             clevr_dataset = CLEVRDataset(args.clevr_root, split="val", download=False)
@@ -207,16 +203,10 @@ def generate_latex_table(results: dict) -> str:
     lines.append(r"\midrule")
     
     # Add NeuroSymbolic-T4 results
-    clevr_val = results.get("CLEVR", {}).get("accuracy", 0) * 100
-    vqa_val = results.get("VQA", {}).get("accuracy", 0) * 100
-    gqa_val = results.get("GQA", {}).get("accuracy", 0) * 100
+    clevr_val = results.get("CLEVR", {}).get("overall_accuracy", 0) * 100
+    vqa_val = results.get("VQA", {}).get("overall_accuracy", 0) * 100
+    gqa_val = results.get("GQA", {}).get("overall_accuracy", 0) * 100
     
-    # Fallback to other metrics if accuracy is not available (for non-mock real runs where it's not implemented)
-    if vqa_val == 0:
-        vqa_val = results.get("VQA", {}).get("avg_concepts_detected", 0)
-    if gqa_val == 0:
-        gqa_val = results.get("GQA", {}).get("avg_compositional_steps", 0)
-
     lines.append(f"NeuroSymbolic-T4 & {clevr_val:.1f}\\% & {vqa_val:.1f}\\% & {gqa_val:.1f}\\% \\\\")
     
     lines.append(r"\bottomrule")
