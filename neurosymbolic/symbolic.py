@@ -36,8 +36,12 @@ class Fact:
         return hash((self.predicate, self.arguments))
     
     def __eq__(self, other) -> bool:
-        return (self.predicate == other.predicate and 
-                self.arguments == other.arguments)
+        if not isinstance(other, Fact):
+            return NotImplemented
+        return (
+            self.predicate == other.predicate
+            and self.arguments == other.arguments
+        )
 
 
 @dataclass
