@@ -257,18 +257,18 @@ neurosymbolic/
 │   ├── FeaturePyramidNetwork
 │   ├── SpatialRelationExtractor
 │   ├── MemoryAugmentedPerception
-│   └── EnhancedPerceptionModule
+│   └── PerceptionModule
 │
 ├── symbolic.py            # Enhanced reasoning module
 │   ├── GraphNeuralReasoner
 │   ├── HierarchicalReasoner
-│   ├── EnhancedSymbolicReasoner
+│   ├── SymbolicReasoner
 │   └── Rule learning utilities
 │
 └── integration.py         # Enhanced integration layer
     ├── NeuralSymbolicGrounding
     ├── AdaptiveRuleSelector
-    ├── EnhancedNeurosymbolicSystem
+    ├── NeurosymbolicSystem
     └── Performance tracking
 ```
 

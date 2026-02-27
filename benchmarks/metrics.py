@@ -144,6 +144,7 @@ class NeurosymbolicMetrics:
         report = []
         report.append("="*80)
         report.append("NEUROSYMBOLIC EVALUATION REPORT")
+        report.append("WARNING: Synthetic data used for some/all benchmarks.")
         report.append("="*80)
         report.append("")
         

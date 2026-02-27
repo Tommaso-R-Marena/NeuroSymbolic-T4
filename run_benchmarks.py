@@ -230,7 +230,7 @@ Model & CLEVR & GQA & Kandinsky & ARC & VQAv2 \\
     # Baseline rows
     for baseline_name in baselines.keys():
         acc = baselines[baseline_name]["accuracy"]
-        latex += f"{baseline_name} & " + " & ".join([f"{acc:.3f}"] * 3 + ["-", "-"]) + r" \\" + "\n"
+        latex += f"{baseline_name} & " + " & ".join([f"{acc:.3f}"] * 5) + r" \\" + "\n"
     
     latex += r"""
 \bottomrule

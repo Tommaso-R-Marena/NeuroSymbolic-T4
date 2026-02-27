@@ -15,8 +15,8 @@ import torch.nn.functional as F
 from typing import Dict, List, Any, Optional, Tuple
 import numpy as np
 
-from .neural import EnhancedPerceptionModule
-from .symbolic import EnhancedSymbolicReasoner, Fact, Rule
+from .neural import PerceptionModule
+from .symbolic import SymbolicReasoner, Fact, Rule
 
 
 class NeuralSymbolicGrounding(nn.Module):
@@ -135,7 +135,7 @@ class ReasoningError(NeurosymbolicError):
     """Error during symbolic reasoning."""
     pass
 
-class EnhancedNeurosymbolicSystem(nn.Module):
+class NeurosymbolicSystem(nn.Module):
     """Enhanced neurosymbolic system with advanced integration.
     
     Features:
@@ -155,20 +155,24 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         concept_names: Optional[List[str]] = None,
         use_grounding: bool = True,
         use_adaptive_rules: bool = True,
+        disable_gnn: bool = False,
+        disable_fpn: bool = False,
     ):
         super().__init__()
         
         # Enhanced perception
         perception_config = perception_config or {}
+        if disable_fpn:
+            perception_config['use_fpn'] = False
         try:
-            self.perception = EnhancedPerceptionModule(**perception_config)
+            self.perception = PerceptionModule(**perception_config)
         except TypeError as e:
             raise ValueError(f"Invalid perception_config: {e}")
         
         # Enhanced symbolic reasoner
         reasoning_config = reasoning_config or {}
-        self.reasoner = EnhancedSymbolicReasoner(
-            use_gnn=True,
+        self.reasoner = SymbolicReasoner(
+            use_gnn=not disable_gnn,
             **reasoning_config
         )
         
@@ -290,7 +294,15 @@ class EnhancedNeurosymbolicSystem(nn.Module):
             self.reasoner.add_rule(head, body, conf)
     
     def perceive(self, x: torch.Tensor, threshold: float = 0.5) -> Dict[str, Any]:
-        """Enhanced perception with rich outputs."""
+        """Enhanced perception with rich outputs.
+
+        Args:
+            x (torch.Tensor): Input image tensor [B, C, H, W].
+            threshold (float): Confidence threshold for concept detection.
+
+        Returns:
+            Dict[str, Any]: Perception results including neural outputs and symbolic scenes.
+        """
         import time
         start_time = time.time()
         
@@ -312,7 +324,7 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         attributes = perception_output["attributes"]
         B = concepts.shape[0]
         
-        symbolic_scenes = []
+        symbolic_scenes: List[List[Tuple[str, float, Dict[str, Any]]]] = []
         for i in range(B):
             scene = self._enhanced_concepts_to_symbols(
                 concepts[i], 
@@ -350,10 +362,19 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         return symbols
     
     def reason(self, 
-               symbolic_scene: List[Tuple[str, float, Dict]], 
+               symbolic_scene: List[Tuple[str, float, Dict[str, Any]]],
                object_id: str = "obj1",
                use_gnn: bool = True) -> Dict[str, Any]:
-        """Enhanced reasoning with GNN and adaptive rules."""
+        """Enhanced reasoning with GNN and adaptive rules.
+
+        Args:
+            symbolic_scene (List[Tuple[str, float, Dict[str, Any]]]): List of perceived concepts.
+            object_id (str): Identifier for the object being reasoned about.
+            use_gnn (bool): Whether to use GNN-based refinement.
+
+        Returns:
+            Dict[str, Any]: Reasoning results including derived facts and timing.
+        """
         import time
         start_time = time.time()
         
@@ -422,7 +443,15 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         }
     
     def forward(self, x: torch.Tensor, threshold: float = 0.5) -> Dict[str, Any]:
-        """Complete enhanced forward pass."""
+        """Complete enhanced forward pass.
+
+        Args:
+            x (torch.Tensor): Input image tensor [B, C, H, W].
+            threshold (float): Confidence threshold for concept detection.
+
+        Returns:
+            Dict[str, Any]: Combined results from perception and reasoning.
+        """
         if x is None or (isinstance(x, torch.Tensor) and x.numel() == 0):
             raise ValueError("Input tensor x cannot be None or empty")
 
@@ -457,7 +486,16 @@ class EnhancedNeurosymbolicSystem(nn.Module):
     
     def query(self, x: torch.Tensor, query: Tuple[str, Tuple[str, ...]], 
              threshold: float = 0.5) -> List[Dict[str, Any]]:
-        """Enhanced query with better proofs."""
+        """Enhanced query with better proofs.
+
+        Args:
+            x (torch.Tensor): Input image tensor.
+            query (Tuple[str, Tuple[str, ...]]): The goal to prove (predicate, args).
+            threshold (float): Confidence threshold.
+
+        Returns:
+            List[Dict[str, Any]]: List of proofs for the query.
+        """
         # Process input
         self.forward(x, threshold)
         
@@ -502,5 +540,3 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         }
 
 
-# Backwards compatibility
-NeurosymbolicSystem = EnhancedNeurosymbolicSystem

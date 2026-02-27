@@ -18,19 +18,56 @@ import math
 
 
 class PositionalEncoding(nn.Module):
-    """Sinusoidal positional encoding for spatial features."""
+    """2D Sinusoidal positional encoding for spatial features."""
     
-    def __init__(self, dim: int, max_len: int = 1000):
+    def __init__(self, dim: int):
         super().__init__()
-        pe = torch.zeros(max_len, dim)
-        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, dim, 2).float() * (-math.log(10000.0) / dim))
-        pe[:, 0::2] = torch.sin(position * div_term)
-        pe[:, 1::2] = torch.cos(position * div_term)
-        self.register_buffer('pe', pe.unsqueeze(0))
+        self.dim = dim
     
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return x + self.pe[:, :x.size(1)]
+        """
+        Args:
+            x: [B, C, H, W] tensor
+
+        Returns:
+            [B, C, H, W] tensor with positional encoding added
+        """
+        B, C, H, W = x.shape
+        device = x.device
+
+        # Create 2D coordinates
+        y_range = torch.arange(H, device=device).float()
+        x_range = torch.arange(W, device=device).float()
+
+        # Compute encoding dimensions (half for x, half for y)
+        dim_half = self.dim // 2
+        div_term = torch.exp(torch.arange(0, dim_half, 2, device=device).float() * (-math.log(10000.0) / dim_half))
+
+        # Y encoding
+        pos_y = y_range.unsqueeze(1) * div_term
+        pe_y = torch.zeros(H, dim_half, device=device)
+        pe_y[:, 0::2] = torch.sin(pos_y)
+        pe_y[:, 1::2] = torch.cos(pos_y)
+        pe_y = pe_y.view(H, 1, dim_half).expand(-1, W, -1)
+
+        # X encoding
+        pos_x = x_range.unsqueeze(1) * div_term
+        pe_x = torch.zeros(W, dim_half, device=device)
+        pe_x[:, 0::2] = torch.sin(pos_x)
+        pe_x[:, 1::2] = torch.cos(pos_x)
+        pe_x = pe_x.view(1, W, dim_half).expand(H, -1, -1)
+
+        # Combine
+        pe = torch.cat([pe_y, pe_x], dim=-1) # [H, W, C]
+        pe = pe.permute(2, 0, 1).unsqueeze(0) # [1, C, H, W]
+
+        # Adjust if C != self.dim
+        if pe.size(1) < C:
+            pe = F.pad(pe, (0, 0, 0, 0, 0, C - pe.size(1)))
+        elif pe.size(1) > C:
+            pe = pe[:, :C, :, :]
+
+        return x + pe
 
 
 class CrossAttention(nn.Module):
@@ -263,9 +300,20 @@ class MemoryAugmentedPerception(nn.Module):
         return augmented
 
 
-class EnhancedPerceptionModule(nn.Module):
+class PerceptionModule(nn.Module):
     """Enhanced neural perception with state-of-the-art architecture.
     
+    This module implements a multi-stage perception pipeline that transforms
+    raw images into grounded concept representations. It utilizes a Feature
+    Pyramid Network (FPN) for multi-scale analysis:
+
+    F_out = OutputConv(Lateral(F_in) + Upsample(F_topdown))
+
+    Concepts are grounded via cross-attention between learned queries Q_c and
+    visual features K_v, V_v:
+
+    Attention(Q_c, K_v, V_v) = Softmax(Q_c @ K_v^T / sqrt(d)) @ V_v
+
     Features:
     - Multi-scale feature extraction with FPN
     - Cross-attention concept grounding
@@ -273,6 +321,12 @@ class EnhancedPerceptionModule(nn.Module):
     - Spatial relation extraction
     - Memory-augmented perception
     - Optimized for T4 GPU
+
+    Attributes:
+        backbone (nn.Module): EfficientNet feature extractor.
+        fpn (FeaturePyramidNetwork): Multi-scale feature fusion.
+        concept_attention (CrossAttention): Concept grounding mechanism.
+        concept_router (DynamicConceptRouter): Capsule-based uncertainty estimation.
     """
     
     def __init__(
@@ -425,13 +479,14 @@ class EnhancedPerceptionModule(nn.Module):
         
         # Extract multi-scale features
         spatial_features = self.extract_multiscale_features(x)  # [B, C, H, W]
-        _, C, H, W = spatial_features.shape
+
+        # Add 2D positional encoding
+        spatial_features = self.pos_encoding(spatial_features)
+
+        B, C, H, W = spatial_features.shape
         
         # Flatten spatial dimensions
         spatial_flat = spatial_features.view(B, C, H * W).transpose(1, 2)  # [B, H*W, C]
-        
-        # Add positional encoding
-        spatial_flat = self.pos_encoding(spatial_flat)
         
         # Project features
         features = self.feature_proj(spatial_flat)  # [B, H*W, feature_dim]
@@ -534,4 +589,3 @@ class EnhancedPerceptionModule(nn.Module):
 
 
 # For backwards compatibility
-PerceptionModule = EnhancedPerceptionModule
