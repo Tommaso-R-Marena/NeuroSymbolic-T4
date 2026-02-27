@@ -118,6 +118,8 @@ class AdaptiveRuleSelector(nn.Module):
         Returns:
             rule_weights: [B, num_rules] selection probabilities
         """
+        if context.dim() == 1:
+            context = context.unsqueeze(0)
         return self.rule_selector(context)
 
 
@@ -186,9 +188,10 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         # Adaptive rule selection
         self.use_adaptive_rules = use_adaptive_rules
         if use_adaptive_rules:
-            feature_dim = perception_config.get('feature_dim', 512)
+            # Use actual concept vocabulary size for selector input dim
+            num_concepts = len(self.concept_names)
             self.rule_selector = AdaptiveRuleSelector(
-                context_dim=feature_dim,
+                context_dim=num_concepts,
                 num_rules=100  # Maximum number of rules
             )
         
@@ -358,18 +361,15 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         self.reasoner.clear()
         self._initialize_enhanced_knowledge()
         
-        # Add perceived concepts as facts (supports legacy 2-tuples and enhanced 3-tuples)
+        # Add perceived concepts as facts (standardized 3-tuples)
         normalized_scene: List[Tuple[str, float, Dict[str, Any]]] = []
         for item in symbolic_scene:
-            if len(item) == 2:
-                concept, confidence = item
-                attrs = {}
-            elif len(item) == 3:
+            if len(item) == 3:
                 concept, confidence, attrs = item
                 attrs = attrs or {}
             else:
                 raise ValueError(
-                    "Each symbolic item must be (concept, confidence) or (concept, confidence, attrs)"
+                    "Each symbolic item must be (concept, confidence, attrs)"
                 )
 
             normalized_scene.append((concept, float(confidence), attrs))
@@ -382,15 +382,19 @@ class EnhancedNeurosymbolicSystem(nn.Module):
         
         # Adaptive rule selection if enabled
         if self.use_adaptive_rules and hasattr(self, 'rule_selector'):
-            # Get context from scene
-            concept_vec = torch.zeros(len(self.concept_names))
+            # Build context vector from scene (sum of concept confidences)
+            context_vec = torch.zeros(len(self.concept_names), device=next(self.parameters()).device)
             for concept, conf, _ in normalized_scene:
                 if concept in self.concept_to_idx:
-                    concept_vec[self.concept_to_idx[concept]] = conf
+                    context_vec[self.concept_to_idx[concept]] = conf
+
+            # Select rules
+            with torch.no_grad():
+                rule_weights = self.rule_selector(context_vec).squeeze(0)
             
-            # Select rules (this would modulate rule usage)
-            # For now, use all rules but could filter
-            pass
+            # Update rule strengths based on selection
+            for i, rule in enumerate(self.reasoner.rules[:len(rule_weights)]):
+                rule.strength *= rule_weights[i].item()
         
         # Forward chaining with GNN
         try:

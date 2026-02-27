@@ -30,7 +30,7 @@ class TestNeurosymbolicSystem:
         assert len(output["symbolic"]) == 2
     
     def test_reason(self, model):
-        symbolic_scene = [("car", 0.9), ("moving", 0.8)]
+        symbolic_scene = [("car", 0.9, {}), ("moving", 0.8, {})]
         reasoning = model.reason(symbolic_scene, object_id="obj1")
         
         assert "num_derived" in reasoning
