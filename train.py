@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler, autocast
+from torch import amp
 import argparse
 from pathlib import Path
 import json
@@ -35,7 +35,7 @@ class SyntheticDataset(torch.utils.data.Dataset):
         active_indices = np.random.choice(num_concepts, num_active, replace=False)
         concepts[active_indices] = 1.0
         
-        return image, concepts
+        return {"image": image, "concepts": concepts}
 
 
 def train_epoch(model, dataloader, optimizer, scaler, device, criterion):
@@ -45,14 +45,14 @@ def train_epoch(model, dataloader, optimizer, scaler, device, criterion):
     total_samples = 0
     
     pbar = tqdm(dataloader, desc="Training")
-    for images, concepts in pbar:
-        images = images.to(device)
-        concepts = concepts.to(device)
+    for batch in pbar:
+        images = batch["image"].to(device)
+        concepts = batch["concepts"].to(device)
         
         optimizer.zero_grad()
         
         # Mixed precision training
-        with autocast():
+        with amp.autocast(device_type=device.type if device.type != 'cpu' else 'cuda', enabled=device.type != 'cpu'):
             outputs = model.perception(images)
             pred_concepts = outputs["concepts"]
             
@@ -60,9 +60,13 @@ def train_epoch(model, dataloader, optimizer, scaler, device, criterion):
             loss = criterion(pred_concepts, concepts)
         
         # Backward pass with gradient scaling
-        scaler.scale(loss).backward()
-        scaler.step(optimizer)
-        scaler.update()
+        if device.type != 'cpu':
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            optimizer.step()
         
         # Statistics
         batch_size = images.size(0)
@@ -83,9 +87,9 @@ def evaluate(model, dataloader, device, criterion):
     all_preds = []
     all_targets = []
     
-    for images, concepts in tqdm(dataloader, desc="Evaluating"):
-        images = images.to(device)
-        concepts = concepts.to(device)
+    for batch in tqdm(dataloader, desc="Evaluating"):
+        images = batch["image"].to(device)
+        concepts = batch["concepts"].to(device)
         
         outputs = model.perception(images)
         pred_concepts = outputs["concepts"]
@@ -166,7 +170,7 @@ def main():
     # Optimizer and loss
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=0.01)
     criterion = nn.BCELoss()
-    scaler = GradScaler()
+    scaler = amp.GradScaler(device=device.type if device.type != 'cpu' else 'cuda', enabled=device.type != 'cpu')
     
     # Training loop
     best_val_loss = float("inf")

@@ -16,7 +16,7 @@ import torch.optim as optim
 import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, ConcatDataset
-from torch.cuda.amp import GradScaler, autocast
+from torch import amp
 import argparse
 from pathlib import Path
 import json
@@ -149,12 +149,14 @@ def train_epoch(model, dataloader, optimizer, scaler, criterion, device, epoch, 
         optimizer.zero_grad()
         
         # Mixed precision forward pass
-        with autocast(device_type='cuda', enabled=args.use_amp):
+        # Use amp.autocast with device type. For CPU, we disable it unless it's supported and requested.
+        # But generally for ICML benchmarks we expect CUDA.
+        with amp.autocast(device_type=device.type if device.type != 'cpu' else 'cuda', enabled=args.use_amp and device.type != 'cpu'):
             outputs = model.perception(images)
             loss, losses = criterion(outputs, targets)
         
         # Backward pass with gradient scaling
-        if args.use_amp:
+        if args.use_amp and device.type != 'cpu':
             scaler.scale(loss).backward()
             
             # Gradient clipping
@@ -214,7 +216,7 @@ def evaluate(model, dataloader, criterion, device, args):
         images = batch["image"].to(device)
         targets = {"concepts": batch.get("concepts", torch.zeros(images.size(0), 100)).to(device)}
         
-        with autocast(device_type='cuda', enabled=args.use_amp):
+        with amp.autocast(device_type=device.type if device.type != 'cpu' else 'cuda', enabled=args.use_amp and device.type != 'cpu'):
             # Perception
             perception_out = model.perception(images)
             loss, _ = criterion(perception_out, targets)
@@ -403,7 +405,7 @@ def main():
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", patience=5)
     
     # Gradient scaler for mixed precision - use new API
-    scaler = GradScaler(device='cuda', enabled=args.use_amp) if torch.cuda.is_available() else GradScaler(enabled=False)
+    scaler = amp.GradScaler(device=device.type if device.type != 'cpu' else 'cuda', enabled=args.use_amp and device.type != 'cpu')
     
     # Curriculum scheduler
     curriculum = CurriculumScheduler(args.epochs) if args.curriculum else None
