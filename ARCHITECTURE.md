@@ -73,7 +73,7 @@ class HierarchicalReasoner:
 - Fuzzy logic operations (product t-norm for AND)
 - Rule strength tracking (success_count / usage_count)
 - GNN-based confidence refinement
-- Temporal decay for old facts
+- **Enhanced Temporal Reasoning**: Persistence-aware decay for facts
 
 #### Improved Backward Chaining
 - Better pruning with rule strength
@@ -84,11 +84,12 @@ class HierarchicalReasoner:
 #### Rule Learning
 ```python
 def learn_rule_from_examples(self, examples):
-    """Learn new rules from positive examples."""
+    """Learn and refine rules from positive examples."""
 ```
-- Induces rules from (conclusion, premises) pairs
-- Generalizes arguments to variables
-- Tracks rule statistics for reinforcement
+- Uses inductive logic programming to generalize specific facts to abstract rules
+- Replaces shared arguments with variables (?v0, ?v1, etc.)
+- Tracks rule statistics (usage, success) for reinforcement learning
+- Updates existing rules if similar patterns are discovered
 
 #### Counterfactual Explanations
 - Enhanced explain() method
@@ -231,7 +232,7 @@ The enhanced architecture enables:
 ### Short-term (1-2 months)
 - [ ] Video reasoning with temporal GNN
 - [ ] Language grounding for VQA tasks
-- [ ] Attention visualization dashboard
+- [x] Attention visualization utility (`scripts/visualize_reasoning.py`)
 - [ ] Rule mining from large corpora
 
 ### Medium-term (3-6 months)

@@ -17,6 +17,7 @@ import numpy as np
 
 from .neural import PerceptionModule
 from .symbolic import SymbolicReasoner, Fact, Rule
+from .advanced_neural import RelationNetwork, SymbolicAttention
 
 
 class NeuralSymbolicGrounding(nn.Module):
@@ -155,6 +156,8 @@ class NeurosymbolicSystem(nn.Module):
         concept_names: Optional[List[str]] = None,
         use_grounding: bool = True,
         use_adaptive_rules: bool = True,
+        use_relation_network: bool = False,
+        use_symbolic_attention: bool = False,
         disable_gnn: bool = False,
         disable_fpn: bool = False,
     ):
@@ -168,17 +171,34 @@ class NeurosymbolicSystem(nn.Module):
             self.perception = PerceptionModule(**perception_config)
         except TypeError as e:
             raise ValueError(f"Invalid perception_config: {e}")
-        
+
+        # Concept vocabulary
+        self.concept_names = concept_names or self._default_concepts()
+        self.concept_to_idx = {name: idx for idx, name in enumerate(self.concept_names)}
+
         # Enhanced symbolic reasoner
         reasoning_config = reasoning_config or {}
         self.reasoner = SymbolicReasoner(
             use_gnn=not disable_gnn,
             **reasoning_config
         )
+
+        feature_dim = perception_config.get('feature_dim', 512)
         
-        # Concept vocabulary
-        self.concept_names = concept_names or self._default_concepts()
-        self.concept_to_idx = {name: idx for idx, name in enumerate(self.concept_names)}
+        # Advanced neural modules
+        self.use_relation_network = use_relation_network
+        if use_relation_network:
+            self.relation_network = RelationNetwork(
+                object_dim=feature_dim,
+                relation_dim=256
+            )
+
+        self.use_symbolic_attention = use_symbolic_attention
+        if use_symbolic_attention:
+            self.symbolic_attention = SymbolicAttention(
+                dim=feature_dim,
+                num_symbols=len(self.concept_names)
+            )
         
         # Neural-symbolic grounding
         self.use_grounding = use_grounding
@@ -306,13 +326,29 @@ class NeurosymbolicSystem(nn.Module):
         import time
         start_time = time.time()
         
-        # Neural perception - disable autocast to avoid dtype issues
+        # Neural perception
         try:
             perception_output = self.perception(
                 x,
                 return_attention=True,
                 return_relations=True
             )
+
+            # Symbolic attention refinement (feedback loop)
+            if self.use_symbolic_attention:
+                concept_features = perception_output["concept_features"]
+                concepts = perception_output["concepts"]
+                # Get indices of top concepts for each batch
+                top_concept_indices = concepts.topk(5, dim=-1)[1]
+
+                refined_features = self.symbolic_attention(concept_features, top_concept_indices)
+                perception_output["concept_features"] = refined_features
+
+            # Global relational reasoning
+            if self.use_relation_network:
+                relational_context = self.relation_network(perception_output["concept_features"])
+                perception_output["relational_context"] = relational_context
+
         except Exception as e:
             raise PerceptionError(f"Neural perception failed: {e}")
         

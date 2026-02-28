@@ -588,4 +588,3 @@ class PerceptionModule(nn.Module):
         return scenes
 
 
-# For backwards compatibility
