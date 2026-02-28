@@ -27,12 +27,19 @@ class Fact:
     confidence: float = 1.0
     timestamp: Optional[int] = None
     source: str = "perceived"  # perceived, derived, learned
+    persistence: float = 1.0  # How long this fact persists (1.0 = standard)
     
     def __str__(self) -> str:
         args = ", ".join(self.arguments)
         return f"{self.predicate}({args}) [{self.confidence:.3f}]"
     
     def __hash__(self) -> int:
+        """Hash based on predicate and arguments only.
+
+        This allows Fact objects to be stored in sets while their confidence
+        scores are refined in-place during reasoning without corrupting the
+        set's internal structure.
+        """
         return hash((self.predicate, self.arguments))
     
     def __eq__(self, other) -> bool:
@@ -271,9 +278,10 @@ class SymbolicReasoner:
         self.time_step = 0
         
     def add_fact(self, predicate: str, arguments: Tuple[str, ...], 
-                 confidence: float = 1.0, source: str = "perceived"):
+                 confidence: float = 1.0, source: str = "perceived",
+                 persistence: float = 1.0):
         """Add fact with indexing."""
-        fact = Fact(predicate, arguments, confidence, self.time_step, source)
+        fact = Fact(predicate, arguments, confidence, self.time_step, source, persistence)
         if fact not in self.facts:
             self.facts.add(fact)
             self._fact_index[predicate].add(fact)
@@ -549,37 +557,115 @@ class SymbolicReasoner:
         
         return explanations
     
+    def _generalize_to_rule(self, conclusion: Fact, premises: List[Fact]) -> Rule:
+        """Generalize specific facts into a rule with variables.
+
+        Replaces shared arguments with variables (?x, ?y, etc.) to create
+        an abstract rule from concrete examples.
+        """
+        # Map specific arguments to variables
+        arg_to_var = {}
+        var_count = 0
+
+        # All arguments in the example
+        all_args = set(conclusion.arguments)
+        for p in premises:
+            all_args.update(p.arguments)
+
+        # Create mapping for shared arguments
+        for arg in sorted(list(all_args)):
+            # If argument appears in more than one place, it's a candidate for a variable
+            occurrences = 0
+            if arg in conclusion.arguments:
+                occurrences += 1
+            for p in premises:
+                if arg in p.arguments:
+                    occurrences += 1
+
+            if occurrences > 1:
+                arg_to_var[arg] = f"?v{var_count}"
+                var_count += 1
+
+        # Build generalized head and body
+        head_args = tuple(arg_to_var.get(a, a) for a in conclusion.arguments)
+        head = (conclusion.predicate, head_args)
+
+        body = []
+        for p in premises:
+            body_args = tuple(arg_to_var.get(a, a) for a in p.arguments)
+            body.append((p.predicate, body_args))
+
+        # Initial confidence based on example confidences
+        avg_conf = (conclusion.confidence + sum(p.confidence for p in premises)) / (1 + len(premises))
+
+        return Rule(head, body, confidence=avg_conf, strength=0.5)
+
     def learn_rule_from_examples(self, examples: List[Tuple[Fact, List[Fact]]]):
-        """Learn new rules from positive examples.
+        """Learn and refine rules from positive examples.
+
+        Uses inductive logic programming principles to generalize specific
+        observations into reusable symbolic rules.
         
         Args:
             examples: List of (conclusion_fact, premise_facts) pairs
         """
-        # Simple rule learning: find common patterns
         for conclusion, premises in examples:
-            if len(premises) < 2:
+            if not premises:
                 continue
             
-            # Create candidate rule
-            head = (conclusion.predicate, conclusion.arguments)
-            body = [(p.predicate, p.arguments) for p in premises]
+            # Generate candidate rule
+            candidate = self._generalize_to_rule(conclusion, premises)
+
+            # Check if we already have a similar rule
+            found = False
+            for rule in self.rules:
+                if rule.head == candidate.head and set(rule.body) == set(candidate.body):
+                    # Update existing rule statistics
+                    rule.update_statistics(success=True)
+                    rule.confidence = (rule.confidence + candidate.confidence) / 2
+                    found = True
+                    break
             
-            # Generalize arguments to variables
-            # (In practice, use more sophisticated induction)
-            rule = Rule(head, body, confidence=0.7, strength=0.5)
-            self.candidate_rules.append(rule)
+            if not found:
+                # Add as a new rule if it has enough support
+                # In a real system, we'd wait for multiple examples
+                self.add_rule(candidate.head, candidate.body, candidate.confidence)
     
     def temporal_forward_chain(self, max_iterations: int = 10) -> int:
-        """Forward chaining with temporal reasoning."""
+        """Forward chaining with enhanced temporal reasoning.
+
+        Increments the system's internal clock and performs inference.
+        Facts decay over time unless they have high persistence.
+        """
         self.time_step += 1
         
         # Regular forward chaining
         new_facts = self.forward_chain(max_iterations)
         
-        # Decay old facts
+        # Decay old facts with persistence awareness
+        to_remove = set()
         for fact in self.facts:
-            if fact.timestamp is not None and fact.timestamp < self.time_step - 5:
-                fact.confidence *= 0.9  # Decay factor
+            if fact.timestamp is not None:
+                age = self.time_step - fact.timestamp
+
+                # Dynamic decay based on persistence
+                # High persistence facts (e.g., > 1.0) decay slowly
+                # Standard persistence (1.0) gives 0.9 decay rate
+                decay_rate = 1.0 - (0.1 / fact.persistence)
+                decay_rate = max(0.0, min(0.999, decay_rate))
+
+                if age > 5:
+                    fact.confidence *= (decay_rate ** (age - 5))
+
+            if fact.confidence < self.confidence_threshold:
+                to_remove.add(fact)
+
+        # Clean up expired facts
+        for fact in to_remove:
+            self.facts.remove(fact)
+            self._fact_index[fact.predicate].discard(fact)
+            for arg in fact.arguments:
+                self._arg_index[arg].discard(fact)
         
         return new_facts
     
@@ -594,4 +680,3 @@ class SymbolicReasoner:
         self.time_step = 0
 
 
-# Backwards compatibility
