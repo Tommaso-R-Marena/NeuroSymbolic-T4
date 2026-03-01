@@ -180,7 +180,16 @@ class DynamicConceptRouter(nn.Module):
 
 
 class FeaturePyramidNetwork(nn.Module):
-    """Feature Pyramid Network for multi-scale perception."""
+    """Feature Pyramid Network for multi-scale perception.
+
+    FPN provides a top-down pathway with lateral connections to build
+    high-level semantic feature maps at all scales.
+
+    Architecture:
+    1. Lateral Conv: 1x1 conv to match channel dimensions.
+    2. Top-down Pathway: Upsample coarser features and add to lateral features.
+    3. Output Conv: 3x3 conv to reduce aliasing from upsampling.
+    """
     
     def __init__(self, in_channels_list: List[int], out_channels: int):
         super().__init__()
@@ -399,6 +408,10 @@ class PerceptionModule(nn.Module):
         # Dynamic concept router
         self.concept_router = DynamicConceptRouter(feature_dim, num_concepts)
         
+        # Learnable FPN fusion weights
+        if use_fpn:
+            self.fpn_fusion_weights = nn.Parameter(torch.ones(len(fpn_channels)))
+
         # Memory augmentation
         if use_memory:
             self.memory_module = MemoryAugmentedPerception(feature_dim)
@@ -429,7 +442,14 @@ class PerceptionModule(nn.Module):
         )
         
     def extract_multiscale_features(self, x: torch.Tensor) -> torch.Tensor:
-        """Extract multi-scale features."""
+        """Extract multi-scale features with learnable fusion.
+
+        Args:
+            x: Input image tensor [B, C, H, W]
+
+        Returns:
+            fused_features: Fused multi-scale features [B, C, H, W]
+        """
         if self.use_fpn:
             # Get multi-level features
             feature_maps = self.backbone(x)
@@ -444,8 +464,13 @@ class PerceptionModule(nn.Module):
                     feat = F.interpolate(feat, size=target_size, mode='bilinear', align_corners=False)
                 resized.append(feat)
             
-            # Mean pooling across scales
-            features = torch.stack(resized, dim=0).mean(dim=0)
+            # Learnable weighted fusion across scales
+            # Use softmax to ensure weights sum to 1
+            weights = F.softmax(self.fpn_fusion_weights, dim=0)
+
+            # Stack and apply weighted sum
+            stacked = torch.stack(resized, dim=0)  # [L, B, C, H, W]
+            features = (stacked * weights.view(-1, 1, 1, 1, 1)).sum(dim=0)
         else:
             features = self.backbone(x)
         

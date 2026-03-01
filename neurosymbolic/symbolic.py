@@ -33,6 +33,9 @@ class Fact:
         args = ", ".join(self.arguments)
         return f"{self.predicate}({args}) [{self.confidence:.3f}]"
     
+    def __repr__(self) -> str:
+        return self.__str__()
+
     def __hash__(self) -> int:
         """Hash based on predicate and arguments only.
 
@@ -68,6 +71,9 @@ class Rule:
         )
         return f"{head_str} :- {body_str} [conf:{self.confidence:.2f}, str:{self.strength:.2f}]"
     
+    def __repr__(self) -> str:
+        return self.__str__()
+
     def update_statistics(self, success: bool):
         """Update rule learning statistics."""
         self.usage_count += 1
@@ -281,6 +287,9 @@ class SymbolicReasoner:
                  confidence: float = 1.0, source: str = "perceived",
                  persistence: float = 1.0):
         """Add fact with indexing."""
+        # Validate confidence
+        confidence = max(0.0, min(1.0, float(confidence)))
+
         fact = Fact(predicate, arguments, confidence, self.time_step, source, persistence)
         if fact not in self.facts:
             self.facts.add(fact)
@@ -291,6 +300,13 @@ class SymbolicReasoner:
             # Initialize GNN embedding
             if self.use_gnn:
                 self.fact_embeddings[fact] = self._compute_fact_embedding(fact)
+        else:
+            # Update confidence if higher
+            for existing_fact in self.facts:
+                if existing_fact == fact:
+                    if confidence > existing_fact.confidence:
+                        existing_fact.confidence = confidence
+                    break
     
     def _compute_fact_embedding(self, fact: Fact) -> torch.Tensor:
         """Compute neural embedding for a fact."""
@@ -441,8 +457,8 @@ class SymbolicReasoner:
                     bindings_list.append(binding)
                 else:
                     remaining = [
-                        (p, tuple(binding.get(a, a) for a in args))
-                        for p, args in body[1:]
+                        (p, tuple(binding.get(a, a) for a in p_args))
+                        for p, p_args in body[1:]
                     ]
                     sub_bindings = self._match_rule_body(remaining)
                     for sub_binding in sub_bindings:

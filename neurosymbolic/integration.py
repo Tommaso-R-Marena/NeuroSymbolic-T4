@@ -508,6 +508,14 @@ class NeurosymbolicSystem(nn.Module):
             # Update confidences
             perception_output["neural"]["calibrated_concepts"] = calibrated_conf
         
+        # Early exit if no symbolic objects detected
+        if not perception_output["symbolic"]:
+            return {
+                "perception": perception_output,
+                "reasoning": [],
+                "stats": self.get_inference_stats(),
+            }
+
         # Reasoning on each scene
         reasoning_outputs = []
         for i, scene in enumerate(perception_output["symbolic"]):
