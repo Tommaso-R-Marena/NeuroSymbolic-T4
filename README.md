@@ -6,9 +6,8 @@
 [![CI/CD](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/ci.yml/badge.svg)](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/ci.yml)
 [![Colab](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/colab-test.yml/badge.svg)](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4/actions/workflows/colab-test.yml)
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/Tommaso-R-Marena/NeuroSymbolic-T4/blob/main/notebooks/NeuroSymbolic_T4_Demo.ipynb)
-[![Paper](https://img.shields.io/badge/ICML-2026-red.svg)](https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4)
 
-State-of-the-art neurosymbolic AI system optimized for Google T4 GPUs, combining neural perception with symbolic reasoning for explainable and trustworthy AI. **ICML 2026 submission-ready** with comprehensive benchmarks on CLEVR, VQA v2.0, and GQA.
+A neurosymbolic AI system optimized for Google T4 GPUs, combining neural perception with symbolic reasoning for explainable and trustworthy AI. Benchmarks on CLEVR, VQA v2.0, and GQA ongoing.
 
 ## 🚀 Quick Start
 
@@ -48,7 +47,7 @@ python benchmarks/run_all.py --mock
 - **💡 Explainable AI**: Generate proof chains for every prediction
 - **🎲 Probabilistic Logic**: Confidence propagation through rules
 - **📥 Automatic Downloads**: One-command dataset setup
-- **📊 ICML Benchmarks**: Publication-ready results
+- **📊 Benchmarks**: CLEVR, VQA v2.0, and GQA evaluation ongoing
 
 ## 🏆 Benchmark Results
 
@@ -58,7 +57,7 @@ python benchmarks/run_all.py --mock
 |--------|-------|----------|-----|----------------|
 | **NeuroSymbolic-T4** | **75.3%** | **68.2%** | **64.7%** | **3.2±1.1** |
 
-*Note: Results obtained on full datasets. Use `--mock` for a quick demonstration of the benchmarking pipeline.*
+*Note: Use `--mock` for a quick demonstration of the benchmarking pipeline.*
 | ResNet-LSTM | 68.1% | 65.4% | 58.3% | - |
 | ViLT | 71.2% | 66.8% | 61.2% | - |
 | MDETR | 73.5% | 67.1% | 63.4% | - |
@@ -301,11 +300,12 @@ pytest tests/test_integration.py -v
 ## 📖 Citation
 
 ```bibtex
-@inproceedings{marena2026neurosymbolic,
-  title={NeuroSymbolic-T4: Efficient Compositional Visual Reasoning with Explainable Inference},
+@misc{marena2026neurosymbolic,
+  title={NeuroSymbolic-T4: Efficient Compositional Visual Reasoning 
+         with Explainable Inference},
   author={Marena, Tommaso R.},
-  booktitle={International Conference on Machine Learning (ICML)},
-  year={2026}
+  year={2026},
+  note={Work in progress}
 }
 ```
 
@@ -341,4 +341,4 @@ Project: [https://github.com/Tommaso-R-Marena/NeuroSymbolic-T4](https://github.c
 
 ---
 
-**Built for ICML 2026** | Optimized for Google Colab T4 GPUs | Research-grade implementation
+Work in Progress | Optimized for Google Colab T4 GPUs | Research-grade implementation
